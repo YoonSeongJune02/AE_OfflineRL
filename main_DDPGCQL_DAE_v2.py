@@ -114,7 +114,7 @@ parser.add_argument("--group", default="DAE-CQL")
 parser.add_argument("--name", default="DDPGCQL_DAE")
 
 args = parser.parse_args()
-args.device = torch.device("cpu")
+args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(args.device)
 args.render = not args.no_render
 
@@ -279,68 +279,63 @@ def wandb_init(config: dict) -> None:
 # Entry
 # ==========================================================
 if __name__ == "__main__":
-    seed_list = [5, 6, 7]
-    env_list = ["highway-humanlike", "highway-ngsim"]
-    args.dataset = env_list[0]
+    if args.dataset is None:
+        args.dataset = "highway-humanlike"
     print(f"--------------------Dataset: {args.dataset}--------------------")
+    state_dim, action_dim = 19, 2
+    set_seed(args.seed)
+    args.name = f"{args.name}-Seed{args.seed}-{args.dataset}-{str(uuid.uuid4())[:8]}"
+    wandb_init(vars(args))
 
-    for j in seed_list:
-        args.seed = j
-        state_dim, action_dim = 19, 2
-        set_seed(args.seed)
+    buffer_size = len(np.load(f"./buffers/{args.dataset}/reward.npy"))
+    replay_buffer = ReplayBuffer(state_dim, action_dim, args.device, buffer_size)
+    replay_buffer.load(f"./buffers/{args.dataset}")
 
-        args.name = f"{args.name}-Seed{args.seed}-{args.dataset}-{str(uuid.uuid4())[:8]}"
-        wandb_init(vars(args))
+    # ---- 1. DAE pretraining ----
+    print(f"\n[Seed {args.seed}] DAE 사전학습 시작...")
+    dae = DAE(
+        state_dim=state_dim,
+        latent_dim=args.dae_latent_dim,
+        hidden_dim=args.dae_hidden_dim,
+        dropout=args.dae_dropout,
+    ).to(args.device)
 
-        buffer_size = len(np.load(f"./buffers/{args.dataset}/reward.npy"))
-        replay_buffer = ReplayBuffer(state_dim, action_dim, args.device, buffer_size)
-        replay_buffer.load(f"./buffers/{args.dataset}")
+    dae, dae_history = pretrain_dae(
+        dae, replay_buffer, args.device,
+        noise_type=args.dae_noise_type,
+        noise_std=args.dae_noise_std,
+        mask_prob=args.dae_mask_prob,
+        epochs=args.dae_epochs,
+        batch_size=args.dae_batch_size,
+        lr=args.dae_lr,
+        weight_decay=args.dae_weight_decay,
+        val_split=args.dae_val_split,
+        patience=args.dae_patience,
+        log_wandb=True,
+    )
 
-        # ---- 1. DAE pretraining ----
-        print(f"\n[Seed {j}] DAE 사전학습 시작...")
-        dae = DAE(
-            state_dim=state_dim,
-            latent_dim=args.dae_latent_dim,
-            hidden_dim=args.dae_hidden_dim,
-            dropout=args.dae_dropout,
-        ).to(args.device)
+    wandb.log({
+        "dae/best_epoch": dae_history["best_epoch"],
+        "dae/final_train_loss": dae_history["train_loss"][-1],
+        "dae/final_val_loss": dae_history["val_loss"][-1],
+    })
 
-        dae, dae_history = pretrain_dae(
-            dae, replay_buffer, args.device,
-            noise_type=args.dae_noise_type,
-            noise_std=args.dae_noise_std,
-            mask_prob=args.dae_mask_prob,
-            epochs=args.dae_epochs,
-            batch_size=args.dae_batch_size,
-            lr=args.dae_lr,
-            weight_decay=args.dae_weight_decay,
-            val_split=args.dae_val_split,
-            patience=args.dae_patience,
-            log_wandb=True,
-        )
+    # ---- 2. Reward shaper ----
+    reward_shaper = RewardShaper(
+        lambda_max=args.shape_lambda_max,
+        warmup_steps=args.shape_warmup_steps,
+        threshold_z=args.shape_threshold_z,
+        use_normalization=not args.shape_no_normalization,
+        use_tanh=not args.shape_no_tanh,
+    )
 
-        wandb.log({
-            "dae/best_epoch": dae_history["best_epoch"],
-            "dae/final_train_loss": dae_history["train_loss"][-1],
-            "dae/final_val_loss": dae_history["val_loss"][-1],
-        })
+    # ---- 3. CQL training with shaping ----
+    print("-" * 53)
+    main(args, replay_buffer, dae, reward_shaper)
+    wandb.finish()
 
-        # ---- 2. Reward shaper ----
-        reward_shaper = RewardShaper(
-            lambda_max=args.shape_lambda_max,
-            warmup_steps=args.shape_warmup_steps,
-            threshold_z=args.shape_threshold_z,
-            use_normalization=not args.shape_no_normalization,
-            use_tanh=not args.shape_no_tanh,
-        )
+    args.name = "DDPGCQL_DAE"
+    print("-------------------DONE OFFLINE RL-------------------")
 
-        # ---- 3. CQL training with shaping ----
-        print("-" * 53)
-        main(args, replay_buffer, dae, reward_shaper)
-        wandb.finish()
-
-        args.name = "DDPGCQL_DAE"
-        print("-------------------DONE OFFLINE RL-------------------")
-
-        import ray
-        ray.shutdown()
+    import ray
+    ray.shutdown()

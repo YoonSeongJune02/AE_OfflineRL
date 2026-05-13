@@ -80,7 +80,7 @@ parser.add_argument('--group', default='AD4RL-FLOW')
 parser.add_argument('--name', default='DDPGCQL')
 
 args = parser.parse_args()
-args.device = torch.device("cpu")
+args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(args.device)
 args.render = not args.no_render
 
@@ -199,7 +199,7 @@ def main(args, replay_buffer):
             print('----------------------------------------------------------------------------------------')
 
             wandb.log(
-                {"vanilla_reward": eval_reward, "coorection_reward": correction_reward, "timesteps": eval_timestep},
+                {"vanilla_reward": eval_reward, "correction_reward": correction_reward, "timesteps": eval_timestep, "epoch": (it + 1) / args.itr, "velocity": np.mean(velocity)},
                 step=it)
 
             reward_list.append(eval_reward)
@@ -216,30 +216,26 @@ def wandb_init(config: dict) -> None:
     wandb.run.save()
 
 if __name__=="__main__":
-    seed_list = [5, 6, 7]
-    env_list = ['highway-humanlike', 'highway-ngsim']
-    args.dataset = env_list[0]
+    if args.dataset is None:
+        args.dataset = 'highway-humanlike'
     print(f'--------------------Dataset: {args.dataset}--------------------')
-    for j in seed_list:
-        args.seed = j
 
-        state_dim = 19
-        action_dim = 2
-        buffer_name = f"{args.dataset}"
-        set_seed(args.seed)
+    state_dim = 19
+    action_dim = 2
+    buffer_name = f"{args.dataset}"
+    set_seed(args.seed)
 
-        args.name = f"{args.name}-Seed{args.seed}-{args.dataset}-{str(uuid.uuid4())[:8]}"
-        config = vars(args)
-        wandb_init(config)
+    args.name = f"{args.name}-Seed{args.seed}-{args.dataset}-{str(uuid.uuid4())[:8]}"
+    config = vars(args)
+    wandb_init(config)
 
-        buffer_size = len(np.load(f"./buffers/{buffer_name}/reward.npy"))
-        replay_buffer = ReplayBuffer(state_dim, action_dim, args.device, buffer_size)
+    buffer_size = len(np.load(f"./buffers/{buffer_name}/reward.npy"))
+    replay_buffer = ReplayBuffer(state_dim, action_dim, args.device, buffer_size)
 
-        print('-----------------------------------------------------')
-        main(args, replay_buffer)
-        wandb.finish()
-        args.name = 'DDPGCQL'
-        print('-------------------DONE OFFLINE RL-------------------')
+    print('-----------------------------------------------------')
+    main(args, replay_buffer)
+    wandb.finish()
+    print('-------------------DONE OFFLINE RL-------------------')
 
-        import ray
-        ray.shutdown()
+    import ray
+    ray.shutdown()

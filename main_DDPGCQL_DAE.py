@@ -23,8 +23,8 @@ import wandb
 
 parser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
-    description="DDPG+CQL+DAE for robust offline RL on AD4RL.",
-    epilog="python main_DDPGCQL_DAE.py EXP_CONFIG")
+    description="Parse argument used when running a Flow simulation.",
+    epilog="python simulate.py EXP_CONFIG")
 
 # required input parameters
 parser.add_argument('exp_config', type=str)
@@ -64,35 +64,23 @@ parser.add_argument('--critic_lr', type=float, default=1e-04)
 parser.add_argument('--target-update-interval', type=int, default=2)
 parser.add_argument('--policy-type')
 
-# DAE: 네트워크 구조
+# DAE parameter
 parser.add_argument('--dae-latent-dim', type=int, default=32)
-parser.add_argument('--dae-hidden-dim', type=int, default=128)
-parser.add_argument('--dae-dropout', type=float, default=0.1)
-
-# DAE: 노이즈
-parser.add_argument('--dae-noise-type', type=str, default='mixed',
-                    choices=['gaussian', 'masking', 'mixed'])
-parser.add_argument('--dae-noise-std', type=float, default=0.1)
-parser.add_argument('--dae-mask-prob', type=float, default=0.05)
-
-# DAE: 학습
-parser.add_argument('--dae-epochs', type=int, default=100)
-parser.add_argument('--dae-lr', type=float, default=1e-3)
-parser.add_argument('--dae-weight-decay', type=float, default=1e-5)
-parser.add_argument('--dae-val-split', type=float, default=0.1)
-parser.add_argument('--dae-patience', type=int, default=10)
-parser.add_argument('--dae-batch-size', type=int, default=256)
-
-# DAE: reward shaping & 평가 시 노이즈 주입
-parser.add_argument('--dae-lambda', type=float, default=0.5)
-parser.add_argument('--eval-noise-std', type=float, default=0.2)
+parser.add_argument('--dae-noise-std', type=float, default=0.1,
+                    help='DAE 사전학습 시 노이즈 강도')
+parser.add_argument('--dae-epochs', type=int, default=50,
+                    help='DAE 사전학습 epoch 수')
+parser.add_argument('--dae-lambda', type=float, default=0.5,
+                    help='reward shaping 패널티 강도')
+parser.add_argument('--eval-noise-std', type=float, default=0.2,
+                    help='평가 시 state에 주입할 노이즈 강도 (0이면 비활성화)')
 
 parser.add_argument('--project', default='AE_OfflineRL')
 parser.add_argument('--group', default='DAE-CQL')
 parser.add_argument('--name', default='DDPGCQL_DAE')
 
 args = parser.parse_args()
-args.device = torch.device("cpu")
+args.device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 print(args.device)
 args.render = not args.no_render
 
@@ -191,7 +179,7 @@ def main(args, replay_buffer, dae):
 
                     state_values = list(state.values())
 
-                    # 평가 시 노이즈 주입 (사고 상황 시뮬레이션)
+                    # 평가 시 노이즈 주입 (eval_noise_std > 0이면 활성화)
                     if args.eval_noise_std > 0:
                         state_noisy = np.array(state_values) + np.random.randn(len(state_values)) * args.eval_noise_std
                     else:
@@ -203,7 +191,7 @@ def main(args, replay_buffer, dae):
                     next_state, reward, done, info = env.step(action)
                     tot_reward += list(reward.values())[0]
 
-                    # 충돌 감지
+                    # 충돌 감지 (info에 collision 정보가 있는 경우)
                     if isinstance(info, dict):
                         collisions += sum(1 for v in info.values()
                                           if isinstance(v, dict) and v.get('collision', False))
@@ -237,9 +225,9 @@ def main(args, replay_buffer, dae):
                 "vanilla_reward": eval_reward,
                 "correction_reward": correction_reward,
                 "timesteps": eval_timestep,
-                "collision_count": avg_collisions,
-                "recon_error": recon_error,
-                "dae_lambda": args.dae_lambda,
+                "collision_count": avg_collisions,     # baseline과 비교할 핵심 지표
+                "recon_error": recon_error,            # DAE 재구성오차 모니터링
+                "dae_lambda": args.dae_lambda, "epoch": (it + 1) / args.itr, "velocity": np.mean(velocity),
             }, step=it)
 
             reward_list.append(eval_reward)
@@ -278,34 +266,18 @@ if __name__ == "__main__":
         replay_buffer = ReplayBuffer(state_dim, action_dim, args.device, buffer_size)
         replay_buffer.load(f"./buffers/{buffer_name}")
 
-        # ---------- DAE 사전학습 (정상 데이터만 사용) ----------
-        print(f"\n[Seed {j}] DAE 사전학습 시작...")
-        dae = DAE(
-            state_dim=state_dim,
-            latent_dim=args.dae_latent_dim,
-            hidden_dim=args.dae_hidden_dim,
-            dropout=args.dae_dropout,
-        ).to(args.device)
-
-        dae, dae_history = pretrain_dae(
+        # DAE 사전학습 (정상 데이터로)
+        print(f"[Seed {j}] DAE 사전학습 시작...")
+        dae = DAE(state_dim=state_dim, latent_dim=args.dae_latent_dim).to(args.device)
+        dae = pretrain_dae(
             dae, replay_buffer, args.device,
-            noise_type=args.dae_noise_type,
             noise_std=args.dae_noise_std,
-            mask_prob=args.dae_mask_prob,
             epochs=args.dae_epochs,
-            batch_size=args.dae_batch_size,
-            lr=args.dae_lr,
-            weight_decay=args.dae_weight_decay,
-            val_split=args.dae_val_split,
-            patience=args.dae_patience,
-            log_wandb=True,
+            batch_size=args.batch,
         )
 
-        wandb.log({
-            "dae/best_epoch": dae_history['best_epoch'],
-            "dae/final_train_loss": dae_history['train_loss'][-1],
-            "dae/final_val_loss": dae_history['val_loss'][-1],
-        })
+        # WandB에 DAE 사전학습 완료 로그
+        wandb.log({"dae_pretrain": "done", "dae_noise_std": args.dae_noise_std})
 
         print('-----------------------------------------------------')
         main(args, replay_buffer, dae)

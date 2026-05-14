@@ -120,7 +120,7 @@ def main(args, replay_buffer):
         flow_params, cls=FlowParamsEncoder, sort_keys=True, indent=4)
     config['env_config']['flow_params'] = flow_json
 
-    ray.init(num_cpus=16, object_store_memory=200 * 1024 * 1024)
+    ray.init(num_cpus=16, object_store_memory=200 * 1024 * 1024, include_dashboard=False)
 
     create_env, gym_name = make_create_env(params=flow_params, version=0)
     register_env(gym_name, create_env)

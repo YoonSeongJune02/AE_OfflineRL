@@ -1,8 +1,8 @@
 #!/bin/bash
 cd ~/AE_OfflineRL
-echo "=== Baseline CQL Full Highway 실험 시작 ==="
+echo "=== Baseline CQL GPU2 실험 시작 ==="
 while true; do
-    for dataset in highway-NGSIM highway-final highway-medium highway-random highway-final-medium highway-final-random highway-humanlike; do
+    for dataset in highway-NGSIM highway-final highway-medium highway-random; do
         for seed in 5 6 7 8 9; do
             echo "Baseline CQL dataset=$dataset seed=$seed 시작..."
             /home/user7/.conda/envs/ad4rl/bin/python main_DDPGCQL.py MA_5LC \

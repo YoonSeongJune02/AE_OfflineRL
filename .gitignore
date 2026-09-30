@@ -4,3 +4,5 @@ __pycache__/
 buffers/
 wandb/
 *.pyc
+verify_out/
+verify_out_run.log

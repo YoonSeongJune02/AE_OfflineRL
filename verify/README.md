@@ -50,7 +50,7 @@
 
 ```bash
 cd ~/AE_OfflineRL
-DATASETS="highway-NGSIM" SEEDS="5" EPISODES=1 \
+GPUS="<번호>" DATASETS="highway-NGSIM" SEEDS="5" EPISODES=1 \
 V1_ARGS="--dae-epochs 3" TRAIN_ARGS="--epochs 1 --itr 2000" \
 bash verify/run_all.sh all
 ```
@@ -65,19 +65,20 @@ rm -rf verify_out
 ### 2. 본 실행
 
 ```bash
-nohup bash verify/run_all.sh all > verify_out_run.log 2>&1 &
+GPUS="<번호> <번호>" nohup bash verify/run_all.sh all > verify_out_run.log 2>&1 &
 tail -f verify_out_run.log
 ```
 
 기본 설정은 데이터셋 3개(NGSIM, final-medium, humanlike) × seed 3개(5, 6, 7) × 정책 3개다.
 바꾸려면 앞에 변수를 붙인다.
+`GPUS`는 기본값이 없어서 꼭 지정해야 한다. 서버 상황(`nvidia-smi`)을 보고 비어 있는 GPU를 적는다.
 
 ```bash
-DATASETS="highway-NGSIM highway-final-medium" SEEDS="5 6 7 8 9" GPUS="0 1 2 3" \
+DATASETS="highway-NGSIM highway-final-medium" SEEDS="5 6 7 8 9" GPUS="<번호> <번호>" \
 nohup bash verify/run_all.sh all > verify_out_run.log 2>&1 &
 ```
 
-단계별로 따로 돌릴 수도 있다: `bash verify/run_all.sh 1` (또는 2, 3, 4).
+단계별로 따로 돌릴 수도 있다: `GPUS="<번호>" bash verify/run_all.sh 1` (또는 2, 3, 4. 4단계 집계는 GPU가 필요 없다).
 2단계는 이미 학습된 정책이 있으면 건너뛰니, 중간에 끊겨도 다시 실행하면 이어서 한다.
 
 ### 걸리는 시간

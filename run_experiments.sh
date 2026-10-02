@@ -1,11 +1,13 @@
 #!/bin/bash
 # CQL(baseline) / DAE+CQL 학습 실행
 #
-#   ALGO=cql GPU=2 bash run_experiments.sh
-#   ALGO=dae GPU=3 DATASETS="highway-NGSIM" SEEDS="5 6 7" EXTRA="--shape-lambda-max 1.0" bash run_experiments.sh
+#   ALGO=cql GPU=<번호> bash run_experiments.sh
+#   ALGO=dae GPU=<번호> DATASETS="highway-NGSIM" SEEDS="5 6 7" EXTRA="--shape-lambda-max 1.0" bash run_experiments.sh
 #
 # 백그라운드로 돌릴 때:
-#   ALGO=cql GPU=2 nohup bash run_experiments.sh > run_cql.log 2>&1 &
+#   ALGO=cql GPU=<번호> nohup bash run_experiments.sh > run_cql.log 2>&1 &
+#
+# GPU 번호는 서버 상황(nvidia-smi)을 보고 그때마다 정한다. 지정하지 않으면 실행하지 않는다.
 #
 # 데이터셋 × seed 조합을 한 번씩 차례로 돌리고 끝난다.
 
@@ -25,11 +27,11 @@ EXTRA=${EXTRA:-}
 case "$ALGO" in
   cql) MAIN=main_DDPGCQL.py;        PREFIX=CQL;     GROUP=${GROUP:-CQL-baseline-highway} ;;
   dae) MAIN=main_DDPGCQL_DAE_v2.py; PREFIX=DAE_CQL; GROUP=${GROUP:-DAE-CQL-highway} ;;
-  *) echo "ALGO를 cql 또는 dae로 지정하세요. 예: ALGO=cql GPU=2 bash run_experiments.sh"; exit 1 ;;
+  *) echo "ALGO를 cql 또는 dae로 지정하세요. 예: ALGO=cql GPU=<번호> bash run_experiments.sh"; exit 1 ;;
 esac
 
 if [ -z "$GPU" ]; then
-  echo "GPU 번호를 지정하세요. 예: ALGO=$ALGO GPU=2 bash run_experiments.sh"
+  echo "GPU 번호를 지정하세요. 예: ALGO=$ALGO GPU=<번호> bash run_experiments.sh"
   exit 1
 fi
 

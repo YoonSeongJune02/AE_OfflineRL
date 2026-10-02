@@ -1,14 +1,16 @@
 #!/bin/bash
 # DAE+CQL 의도 검증 전체 실행
 #
-#   bash verify/run_all.sh all      # 1 → 2 → 3 → 4 순서대로 전부
+#   GPUS="<번호> <번호>" bash verify/run_all.sh all      # 1 → 2 → 3 → 4 순서대로 전부
 #   bash verify/run_all.sh 1        # 검증 1만 (DAE 학습 + OOD 감지 + 패널티 신호)
 #   bash verify/run_all.sh 2        # 정책 학습만 (SUMO 없음)
 #   bash verify/run_all.sh 3        # 평가만 (SUMO 사용)
 #   bash verify/run_all.sh 4        # 집계만
 #
 # 오래 걸리니 보통은 이렇게 백그라운드로:
-#   nohup bash verify/run_all.sh all > verify_out/run_all.log 2>&1 &
+#   GPUS="<번호> <번호>" nohup bash verify/run_all.sh all > verify_out_run.log 2>&1 &
+#
+# GPUS는 서버 상황(nvidia-smi)을 보고 그때마다 정한다. 지정하지 않으면 실행하지 않는다.
 #
 # 아래 값만 바꿔서 쓰면 된다.
 
@@ -19,7 +21,7 @@ PY=${PY:-/home/user7/.conda/envs/ad4rl/bin/python}
 DATASETS=(${DATASETS:-highway-NGSIM highway-final-medium highway-humanlike})
 SEEDS=(${SEEDS:-5 6 7})
 PRESETS=(${PRESETS:-cql dae_orig dae_fix})
-GPUS=(${GPUS:-0 1 2 3})
+GPUS=(${GPUS:-})
 CONDITIONS=${CONDITIONS:-"clean noise noise_orig denoise cutin lanereduction"}
 EPISODES=${EPISODES:-5}
 MAX_PAR_TRAIN=${MAX_PAR_TRAIN:-4}   # 학습은 SUMO를 안 쓰므로 여러 개 동시에 돌려도 된다
@@ -27,6 +29,11 @@ MAX_PAR_EVAL=${MAX_PAR_EVAL:-2}     # 평가는 SUMO를 띄우므로 적게
 V1_ARGS=${V1_ARGS:-}                # 예: V1_ARGS="--dae-epochs 3" (빠른 시험용)
 TRAIN_ARGS=${TRAIN_ARGS:-}          # 예: TRAIN_ARGS="--epochs 1 --itr 2000" (빠른 시험용)
 EVAL_ARGS=${EVAL_ARGS:-}
+
+if [ "${1:-all}" != "4" ] && [ ${#GPUS[@]} -eq 0 ]; then
+  echo "GPUS를 지정하세요. 예: GPUS=\"<번호> <번호>\" bash verify/run_all.sh all"
+  exit 1
+fi
 
 LOG_DIR=verify_out/logs
 mkdir -p "$LOG_DIR"

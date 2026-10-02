@@ -41,14 +41,16 @@ DAE는 CQL 학습 전에 버퍼 state로 먼저 학습하고, CQL 학습 중에�
 
 ```bash
 # Baseline (CQL)
-ALGO=cql GPU=2 bash run_experiments.sh
+ALGO=cql GPU=<번호> bash run_experiments.sh
 
 # 제안 방법 (DAE+CQL), λ_max = 1.0
-ALGO=dae GPU=3 EXTRA="--shape-lambda-max 1.0" bash run_experiments.sh
+ALGO=dae GPU=<번호> EXTRA="--shape-lambda-max 1.0" bash run_experiments.sh
 
 # 데이터셋과 seed 지정
-ALGO=cql GPU=2 DATASETS="highway-NGSIM highway-humanlike" SEEDS="5 6 7" bash run_experiments.sh
+ALGO=cql GPU=<번호> DATASETS="highway-NGSIM highway-humanlike" SEEDS="5 6 7" bash run_experiments.sh
 ```
+
+GPU 번호는 실행할 때마다 서버 상황(`nvidia-smi`)을 보고 정합니다. 지정하지 않으면 실행되지 않습니다.
 
 결과는 WandB에 `CQL_<데이터셋>_seed<번호>`, `DAE_CQL_<데이터셋>_seed<번호>` 이름으로 기록됩니다.
 학습 중 평가 점수는 AD4RL 논문과 같은 `correction_reward`입니다.

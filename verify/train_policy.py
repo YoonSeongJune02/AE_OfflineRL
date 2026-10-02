@@ -16,9 +16,9 @@ SUMO 포트 충돌도 없고 여러 개를 동시에 돌려도 된다.
 
 실행 예:
     python verify/v1_dae_ood.py --dataset highway-NGSIM --seed 5      # DAE 먼저
-    CUDA_VISIBLE_DEVICES=0 python verify/train_policy.py --preset cql      --dataset highway-NGSIM --seed 5
-    CUDA_VISIBLE_DEVICES=1 python verify/train_policy.py --preset dae_orig --dataset highway-NGSIM --seed 5
-    CUDA_VISIBLE_DEVICES=2 python verify/train_policy.py --preset dae_fix  --dataset highway-NGSIM --seed 5
+    CUDA_VISIBLE_DEVICES=<번호> python verify/train_policy.py --preset cql      --dataset highway-NGSIM --seed 5
+    CUDA_VISIBLE_DEVICES=<번호> python verify/train_policy.py --preset dae_orig --dataset highway-NGSIM --seed 5
+    CUDA_VISIBLE_DEVICES=<번호> python verify/train_policy.py --preset dae_fix  --dataset highway-NGSIM --seed 5
 """
 
 import argparse

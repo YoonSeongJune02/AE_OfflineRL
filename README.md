@@ -1,4 +1,69 @@
-# AD4RL 
+# AE_OfflineRL
+
+자율주행 오프라인 강화학습 벤치마크 [AD4RL](https://sites.google.com/view/ad4rl/%ED%99%88) (ICRA 2024) 위에서 진행한 졸업작품입니다.
+AD4RL의 DDPG+CQL에 Denoising Autoencoder(DAE)를 붙여, 데이터에서 보기 드문 상태로 가는 것을 보상으로 억제해 봤습니다.
+
+## 아이디어
+
+CQL은 데이터에 없는 **행동**의 Q값을 낮춰서 정책을 보수적으로 만듭니다. 하지만 정책이 어떤 **상태**로 가게 되는지는 따로 보지 않습니다.
+이 프로젝트에서는 오프라인 데이터의 state로 DAE를 학습시키고, 재구성오차가 큰 state를 "데이터에서 보기 드문 상태"로 봤습니다.
+학습할 때 그런 state에서는 보상을 깎습니다.
+
+```
+shaped_reward = reward − λ_t · penalty
+
+z       = (재구성오차 − 이동평균) / 이동표준편차
+penalty = tanh(max(0, z − 1))
+λ_t     = λ_max · min(1, t / 10000)      # 처음 10,000 step 동안 0에서 λ_max까지 올림
+```
+
+DAE는 CQL 학습 전에 버퍼 state로 먼저 학습하고, CQL 학습 중에는 고정해서 씁니다.
+
+## 파일 구성
+
+| 파일 | 내용 |
+| --- | --- |
+| `main_DDPGCQL.py` | Baseline. AD4RL의 DDPG+CQL |
+| `main_DDPGCQL_DAE_v2.py` | 제안 방법. DAE 사전학습 → 보상 조정을 넣은 DDPG+CQL 학습 |
+| `Algos/DDPG_CQL.py` | DDPG+CQL |
+| `Algos/DDPG_CQL_DAE_v2.py` | DDPG+CQL에 보상 조정을 더한 버전 |
+| `Algos/DAE_v2.py` | DAE 모델과 사전학습 함수 |
+| `Algos/reward_shaping_v2.py` | 재구성오차 → 패널티 변환 (`RewardShaper`) |
+| `run_experiments.sh` | 데이터셋 × seed 조합으로 학습 실행 |
+| `verify/` | 제안 방법이 의도대로 동작하는지 확인하는 검증 코드 ([설명](verify/README.md)) |
+| `tests/test_dae_v2.py` | DAE·RewardShaper 단위 테스트 |
+
+나머지 `main_*.py`(BC, BCQ, AWAC, EDAC, PLAS, DDPGBC)와 `exp_configs/`, `requirements/`는 AD4RL 원본입니다.
+
+## 실행
+
+환경 설치는 아래 AD4RL 원본 안내를 따릅니다. 데이터셋은 `buffers/<데이터셋 이름>/`에 `state.npy`, `action.npy`, `next_state.npy`, `reward.npy`, `done.npy`로 둡니다.
+
+```bash
+# Baseline (CQL)
+ALGO=cql GPU=2 bash run_experiments.sh
+
+# 제안 방법 (DAE+CQL), λ_max = 1.0
+ALGO=dae GPU=3 EXTRA="--shape-lambda-max 1.0" bash run_experiments.sh
+
+# 데이터셋과 seed 지정
+ALGO=cql GPU=2 DATASETS="highway-NGSIM highway-humanlike" SEEDS="5 6 7" bash run_experiments.sh
+```
+
+결과는 WandB에 `CQL_<데이터셋>_seed<번호>`, `DAE_CQL_<데이터셋>_seed<번호>` 이름으로 기록됩니다.
+학습 중 평가 점수는 AD4RL 논문과 같은 `correction_reward`입니다.
+
+검증 실험은 [verify/README.md](verify/README.md)를 보세요.
+
+```bash
+python tests/test_dae_v2.py
+```
+
+---
+
+아래는 AD4RL 원본 README입니다.
+
+# AD4RL (원본)
 
 [//]: # (<div>)
 
